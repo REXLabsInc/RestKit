@@ -187,6 +187,8 @@ static void *RKOperationFinishDate = &RKOperationFinishDate;
 NSString *const RKObjectRequestOperationDidStartNotification = @"RKObjectRequestOperationDidStartNotification";
 NSString *const RKObjectRequestOperationDidFinishNotification = @"RKObjectRequestOperationDidFinishNotification";
 NSString *const RKResponseHasBeenMappedCacheUserInfoKey = @"RKResponseHasBeenMapped";
+
+NSString *const RKObjectRequestOperationHTTPRequestDidStartUserInfoKey = @"httpRequestStartedAt";
 NSString *const RKObjectRequestOperationMappingDidStartUserInfoKey = @"mappingStartedAt";
 NSString *const RKObjectRequestOperationMappingDidFinishUserInfoKey = @"mappingFinishedAt";
 
@@ -249,6 +251,7 @@ static NSString *RKStringDescribingURLResponseWithData(NSURLResponse *response, 
 @property (nonatomic, strong, readwrite) NSError *error;
 @property (nonatomic, strong) RKObjectResponseMapperOperation *responseMapperOperation;
 @property (nonatomic, copy) id (^willMapDeserializedResponseBlock)(id deserializedResponseBody);
+@property (nonatomic, strong) NSDate *httpRequestDidStartDate;
 @property (nonatomic, strong) NSDate *mappingDidStartDate;
 @property (nonatomic, strong) NSDate *mappingDidFinishDate;
 @property (nonatomic, copy) void (^successBlock)(RKObjectRequestOperation *operation, RKMappingResult *mappingResult);
@@ -333,7 +336,14 @@ static NSString *RKStringDescribingURLResponseWithData(NSURLResponse *response, 
         [self.stateMachine setFinalizationBlock:^{
             [weakSelf willFinish];
             RKDecrementNetworkAcitivityIndicator();
-            [[NSNotificationCenter defaultCenter] postNotificationName:RKObjectRequestOperationDidFinishNotification object:weakSelf userInfo:@{ RKObjectRequestOperationMappingDidStartUserInfoKey: weakSelf.mappingDidStartDate ?: [NSNull null], RKObjectRequestOperationMappingDidFinishUserInfoKey: weakSelf.mappingDidFinishDate ?: [NSNull null] }];
+
+            NSDictionary *userInfo = @{
+              RKObjectRequestOperationHTTPRequestDidStartUserInfoKey: weakSelf.httpRequestDidStartDate ?: [NSNull null],
+              RKObjectRequestOperationMappingDidStartUserInfoKey: weakSelf.mappingDidStartDate ?: [NSNull null],
+              RKObjectRequestOperationMappingDidFinishUserInfoKey: weakSelf.mappingDidFinishDate ?: [NSNull null]
+            };
+
+            [[NSNotificationCenter defaultCenter] postNotificationName:RKObjectRequestOperationDidFinishNotification object:weakSelf userInfo:userInfo];
         }];
         [self.stateMachine setCancellationBlock:^{
             [weakSelf.HTTPRequestOperation cancel];
@@ -470,7 +480,7 @@ static NSString *RKStringDescribingURLResponseWithData(NSURLResponse *response, 
 - (void)execute
 {
     __weak __typeof(self)weakSelf = self;    
-    
+    weakSelf.httpRequestDidStartDate = [NSDate date];
     [self.HTTPRequestOperation setCompletionBlockWithSuccess:^(AFRKHTTPRequestOperation *operation, id responseObject) {
         if (weakSelf.isCancelled) {
             [weakSelf.stateMachine finish];
